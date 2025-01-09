@@ -98,52 +98,31 @@ jobs:
           echo "等待服务部署完成..."
           timeout 300 bash -c '
           while true; do
-            STATUS=$(aws ecs describe-services \
+            DEPLOYMENT_INFO=$(aws ecs describe-services \
               --cluster ${{ env.ECS_CLUSTER }} \
               --services ${{ env.ECS_SERVICE }} \
-              --query "services[0].deployments[?status=='\''PRIMARY'\''].rolloutState" \
+              --query '\''services[0].deployments[?status==`PRIMARY`].[rolloutState,runningCount,desiredCount,failedTasks]'\'' \
               --output text)
             
-            if [ "$STATUS" = "COMPLETED" ]; then
-              echo "部署完成！"
+            STATUS=$(echo "$DEPLOYMENT_INFO" | cut -f1)
+            RUNNING=$(echo "$DEPLOYMENT_INFO" | cut -f2)
+            DESIRED=$(echo "$DEPLOYMENT_INFO" | cut -f3)
+            FAILED=$(echo "$DEPLOYMENT_INFO" | cut -f4)
+            
+            echo "状态: $STATUS, 运行任务: $RUNNING/$DESIRED, 失败任务: $FAILED"
+            
+            if [ "$STATUS" = "COMPLETED" ] && [ "$RUNNING" = "$DESIRED" ]; then
+              echo "✅ 部署完成！"
               exit 0
-            elif [ "$STATUS" = "FAILED" ]; then
-              echo "部署失败！"
+            elif [ "$STATUS" = "FAILED" ] || [ "$FAILED" -gt 0 ]; then
+              echo "❌ 部署失败！"
               exit 1
+            elif [ "$RUNNING" = "$DESIRED" ] && [ "$STATUS" = "IN_PROGRESS" ]; then
+              echo "🔄 任务已运行，等待健康检查..."
             fi
             
-            echo "部署状态: $STATUS，继续等待..."
             sleep 10
           done'
-
-      - name: Check Deployment Status
-        run: |
-          DEPLOYMENT_STATUS=$(aws ecs describe-services \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_SERVICE }} \
-            --query 'services[0].deployments[?status==`PRIMARY`].rolloutState' \
-            --output text)
-          
-          if [ "$DEPLOYMENT_STATUS" != "COMPLETED" ]; then
-            echo "部署未完成，状态: $DEPLOYMENT_STATUS"
-            exit 1
-          fi
-          
-          echo "部署已完成！"
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          release_name: Release v${{ steps.version.outputs.version }}
-          body: |
-            Release of version ${{ steps.version.outputs.version }}
-            Deployed image: ${{ steps.build-image.outputs.image }}
-          draft: false
-          prerelease: false
 
       - name: Notify Success
         if: success()
