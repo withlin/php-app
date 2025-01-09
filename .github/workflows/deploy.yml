@@ -83,9 +83,7 @@ jobs:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
-          wait-for-minutes: 10
-          force-new-deployment: true
+          wait-for-service-stability: false
 
       - name: Force Update ECS Service
         run: |
@@ -94,6 +92,29 @@ jobs:
             --service ${{ env.ECS_SERVICE }} \
             --force-new-deployment \
             --deployment-configuration "maximumPercent=200,minimumHealthyPercent=100"
+
+      - name: Wait for Service Deployment
+        run: |
+          echo "等待服务部署完成..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --max-wait-time 300
+
+      - name: Check Deployment Status
+        run: |
+          DEPLOYMENT_STATUS=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --query 'services[0].deployments[?status==`PRIMARY`].rolloutState' \
+            --output text)
+          
+          if [ "$DEPLOYMENT_STATUS" != "COMPLETED" ]; then
+            echo "部署未完成，状态: $DEPLOYMENT_STATUS"
+            exit 1
+          fi
+          
+          echo "部署已完成！"
 
       - name: Create Release
         id: create_release
