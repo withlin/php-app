@@ -24,6 +24,11 @@ WORKDIR /var/www/html
 # 复制项目文件
 COPY . .
 
+# 设置目录权限
+RUN mkdir -p bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache
+
 # 安装依赖
 RUN composer install --no-interaction --no-dev --optimize-autoloader
 
