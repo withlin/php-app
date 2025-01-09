@@ -1,0 +1,12 @@
+version: '3'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - CUSTOM_ENV_VAR=Hello from Docker Environment!
+      - APP_KEY=base64:dckYPK3SqUk4cI0g0j6nZQNhICnJIEBZUzg0z2OoOsM=
+      - LOG_CHANNEL=stderr 
